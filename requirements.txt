@@ -7,3 +7,11 @@ pypdf
 fastapi
 uvicorn
 langchain
+azure-ai-projects
+pypdf 
+langchain_community
+langchain_text_splitters
+langchain_openai
+langchain_core
+pathlib 
+chunker 
