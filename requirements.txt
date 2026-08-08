@@ -1,0 +1,9 @@
+openai
+azure-search-documents
+azure-storage-blob
+azure-identity
+python-dotenv
+pypdf
+fastapi
+uvicorn
+langchain
