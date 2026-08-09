@@ -1,15 +1,18 @@
+import os
 from typing import cast
-
-from azure.identity import DefaultAzureCredential
+from dotenv import load_dotenv
+from azure.identity import ClientSecretCredential
 from azure.ai.inference import EmbeddingsClient
+from src.config import FOUNDRY_MODEL_ENDPOINT,FOUNDRY_EMBEDDING_MODEL
 
-from src.config import (
-    FOUNDRY_MODEL_ENDPOINT,
-    FOUNDRY_EMBEDDING_MODEL,
+
+load_dotenv()
+
+credential = ClientSecretCredential(
+    tenant_id=os.getenv("AZURE_TENANT_ID"),
+    client_id=os.getenv("AZURE_CLIENT_ID"),
+    client_secret=os.getenv("AZURE_CLIENT_SECRET"),
 )
-
-
-credential = DefaultAzureCredential()
 
 embedding_client = EmbeddingsClient(
     endpoint=FOUNDRY_MODEL_ENDPOINT,
@@ -17,9 +20,8 @@ embedding_client = EmbeddingsClient(
     model=FOUNDRY_EMBEDDING_MODEL,
     credential_scopes=[
         "https://cognitiveservices.azure.com/.default"
-    ]
+    ],
 )
-
 
 def embed_documents(texts: list[str]) -> list[list[float]]:
 

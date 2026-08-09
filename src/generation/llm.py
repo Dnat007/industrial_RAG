@@ -1,4 +1,7 @@
-from azure.identity import DefaultAzureCredential
+import os
+
+from dotenv import load_dotenv
+from azure.identity import ClientSecretCredential
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import SystemMessage, UserMessage
 
@@ -8,7 +11,27 @@ from src.config import (
 )
 
 
-credential = DefaultAzureCredential()
+# ============================================================
+# LOAD ENVIRONMENT VARIABLES
+# ============================================================
+
+load_dotenv()
+
+
+# ============================================================
+# AZURE SERVICE PRINCIPAL AUTHENTICATION
+# ============================================================
+
+credential = ClientSecretCredential(
+    tenant_id=os.getenv("AZURE_TENANT_ID"),
+    client_id=os.getenv("AZURE_CLIENT_ID"),
+    client_secret=os.getenv("AZURE_CLIENT_SECRET"),
+)
+
+
+# ============================================================
+# MICROSOFT FOUNDRY MODEL CLIENT
+# ============================================================
 
 chat_client = ChatCompletionsClient(
     endpoint=FOUNDRY_MODEL_ENDPOINT,
@@ -18,6 +41,10 @@ chat_client = ChatCompletionsClient(
     ],
 )
 
+
+# ============================================================
+# GENERATE ANSWER
+# ============================================================
 
 def generate_answer(messages: list[dict]) -> str:
 

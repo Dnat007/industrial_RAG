@@ -4,9 +4,18 @@ from src.generation.prompt import build_prompt
 from src.generation.llm import generate_answer
 
 from src.security.prompt_shield import shield_prompt
+
 from src.security.guardrails import (
     validate_query,
     validate_output,
+)
+
+from src.security.sensitive_data import (
+    scan_sensitive_data,
+)
+
+from src.analyzer.analyzer import (
+    analyze_query,
 )
 
 
@@ -18,6 +27,7 @@ def ask(
     departments: list[str] | None = None,
     versions: list[str] | None = None,
     document_ids: list[str] | None = None,
+    skip_analysis: bool = False,
 ) -> dict:
 
     # =========================================================
@@ -26,7 +36,9 @@ def ask(
 
     try:
 
-        validate_query(query)
+        validate_query(
+            query
+        )
 
     except ValueError as e:
 
@@ -37,9 +49,72 @@ def ask(
             "block_reason": "input_guardrail",
         }
 
+    # =========================================================
+    # 2. QUERY AMBIGUITY ANALYSIS
+    # =========================================================
+
+    if not skip_analysis:
+
+        try:
+
+            query_analysis = analyze_query(
+                query
+            )
+
+        except Exception:
+
+            # If analyzer fails, do not make the
+            # entire RAG system unusable.
+            #
+            # We fall back to normal retrieval.
+
+            query_analysis = {
+                "is_ambiguous": False,
+                "reason": None,
+                "missing_information": [],
+                "clarification_question": None,
+            }
+
+        # -----------------------------------------------------
+        # Ask clarification only for MATERIAL ambiguity
+        # -----------------------------------------------------
+
+        if query_analysis[
+            "is_ambiguous"
+        ]:
+
+            return {
+                "answer": (
+                    query_analysis[
+                        "clarification_question"
+                    ]
+                ),
+
+                "sources": [],
+
+                "blocked": False,
+
+                "needs_clarification": True,
+
+                "clarification": {
+                    "original_query": query,
+
+                    "missing_information": (
+                        query_analysis[
+                            "missing_information"
+                        ]
+                    ),
+
+                    "reason": (
+                        query_analysis[
+                            "reason"
+                        ]
+                    ),
+                },
+            }
 
     # =========================================================
-    # 2. USER PROMPT INJECTION CHECK
+    # 3. USER PROMPT INJECTION CHECK
     # =========================================================
 
     try:
@@ -59,13 +134,10 @@ def ask(
             ),
             "sources": [],
             "blocked": True,
-            "block_reason": "security_service_unavailable",
+            "block_reason": (
+                "security_service_unavailable"
+            ),
         }
-
-
-    # ---------------------------------------------------------
-    # Block user prompt if injection is detected
-    # ---------------------------------------------------------
 
     if user_security["user_attack"]:
 
@@ -77,34 +149,42 @@ def ask(
             ),
             "sources": [],
             "blocked": True,
-            "block_reason": "user_prompt_injection",
+            "block_reason": (
+                "user_prompt_injection"
+            ),
         }
 
-
     # =========================================================
-    # 3. HYBRID RETRIEVAL + SEMANTIC RERANKING
+    # 4. HYBRID RETRIEVAL + SEMANTIC RERANKING
     # =========================================================
 
     results = rerank(
         query=query,
         k=k,
         candidate_k=candidate_k,
-        allowed_access_levels=allowed_access_levels,
+
+        allowed_access_levels=(
+            allowed_access_levels
+        ),
+
         departments=departments,
+
         versions=versions,
+
         document_ids=document_ids,
     )
 
-
     # =========================================================
-    # 4. DOCUMENT PROMPT INJECTION CHECK
+    # 5. DOCUMENT PROMPT INJECTION CHECK
     # =========================================================
 
     document_texts = [
-        result.get("content", "")
+        result.get(
+            "content",
+            ""
+        )
         for result in results
     ]
-
 
     try:
 
@@ -117,8 +197,8 @@ def ask(
 
         return {
             "answer": (
-                "I couldn't safely validate the retrieved "
-                "documents."
+                "I couldn't safely validate the "
+                "retrieved documents."
             ),
             "sources": [],
             "blocked": True,
@@ -127,15 +207,15 @@ def ask(
             ),
         }
 
-
     # =========================================================
-    # 5. REMOVE MALICIOUS DOCUMENT CHUNKS
+    # 6. REMOVE MALICIOUS DOCUMENT CHUNKS
     # =========================================================
 
     blocked_indexes = set(
-        document_security["document_attacks"]
+        document_security[
+            "document_attacks"
+        ]
     )
-
 
     safe_results = [
         result
@@ -143,9 +223,8 @@ def ask(
         if index not in blocked_indexes
     ]
 
-
     # =========================================================
-    # 6. CHECK WHETHER SAFE DOCUMENTS REMAIN
+    # 7. NO SAFE DOCUMENTS
     # =========================================================
 
     if not safe_results:
@@ -162,18 +241,16 @@ def ask(
             ),
         }
 
-
     # =========================================================
-    # 7. BUILD CONTEXT
+    # 8. BUILD CONTEXT
     # =========================================================
 
     context = build_context(
         safe_results
     )
 
-
     # =========================================================
-    # 8. BUILD LLM PROMPT
+    # 9. BUILD LLM PROMPT
     # =========================================================
 
     messages = build_prompt(
@@ -181,18 +258,16 @@ def ask(
         context=context,
     )
 
-
     # =========================================================
-    # 9. GENERATE ANSWER
+    # 10. GENERATE ANSWER
     # =========================================================
 
     raw_answer = generate_answer(
         messages
     )
 
-
     # =========================================================
-    # 10. OUTPUT GUARDRAILS
+    # 11. OUTPUT GUARDRAILS
     # =========================================================
 
     try:
@@ -205,18 +280,55 @@ def ask(
 
         return {
             "answer": (
-                "I couldn't return the generated response "
-                "because it did not pass the required "
-                "security checks."
+                "I couldn't return the generated "
+                "response because it did not pass "
+                "the required security checks."
             ),
             "sources": [],
             "blocked": True,
-            "block_reason": "output_guardrail",
+            "block_reason": (
+                "output_guardrail"
+            ),
         }
 
+    # =========================================================
+    # 12. SENSITIVE DATA PROTECTION
+    # =========================================================
+
+    try:
+
+        sensitive_result = scan_sensitive_data(
+            answer
+        )
+
+    except Exception:
+
+        return {
+            "answer": (
+                "I couldn't safely validate the "
+                "generated response for sensitive data."
+            ),
+            "sources": [],
+            "blocked": True,
+            "block_reason": (
+                "sensitive_data_service_unavailable"
+            ),
+        }
 
     # =========================================================
-    # 11. SOURCES
+    # 13. REDACT PROTECTED DATA
+    # =========================================================
+
+    if sensitive_result[
+        "contains_sensitive_data"
+    ]:
+
+        answer = sensitive_result[
+            "redacted_text"
+        ]
+
+    # =========================================================
+    # 14. SOURCES
     # =========================================================
 
     sources = []
@@ -227,17 +339,24 @@ def ask(
             "document_name": result.get(
                 "document_name"
             ),
+
             "page_number": result.get(
                 "page_number"
             ),
+
             "document_id": result.get(
                 "document_id"
             ),
         })
+
+    # =========================================================
+    # 15. FINAL RESPONSE
+    # =========================================================
 
     return {
         "answer": answer,
         "sources": sources,
         "blocked": False,
         "block_reason": None,
+        "needs_clarification": False,
     }

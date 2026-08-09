@@ -16,3 +16,6 @@ langchain_core
 pathlib 
 chunker 
 requests
+azure-ai-textanalytics
+azure-identity 
+azure-storage-blob

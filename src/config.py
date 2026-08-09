@@ -6,10 +6,8 @@ load_dotenv()
 
 def get_env(name: str) -> str:
     value = os.getenv(name)
-
     if not value:
         raise ValueError(f"Missing environment variable: {name}")
-
     return value
 
 
@@ -35,3 +33,7 @@ AZURE_STORAGE_CONTAINER_NAME = get_env("AZURE_STORAGE_CONTAINER_NAME")
 
 CONTENT_SAFETY_ENDPOINT = get_env("CONTENT_SAFETY_ENDPOINT")
 CONTENT_SAFETY_KEY = get_env("CONTENT_SAFETY_KEY")
+
+# Data Isolation
+LANGUAGE_ENDPOINT = get_env("LANGUAGE_ENDPOINT")
+LANGUAGE_KEY = get_env("LANGUAGE_KEY")

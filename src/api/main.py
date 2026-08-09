@@ -64,7 +64,7 @@ def main():
             print("\nError:")
             print(str(e))
 
-        print("\n" + "-" * 70 + "\n")
+        # print("\n" + "-" * 70 + "\n")
 
 
 if __name__ == "__main__":
