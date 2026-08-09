@@ -60,11 +60,7 @@ def build_filter(
     """
 
     filters: list[str] = []
-
-    # ---------------------------------------------------------
-    # 1. Security / access filtering
-    # ---------------------------------------------------------
-
+# access level filter like department finance main person
     if allowed_access_levels:
         expression = _search_in(
             "access_level",
@@ -73,10 +69,6 @@ def build_filter(
 
         if expression:
             filters.append(expression)
-
-    # ---------------------------------------------------------
-    # 2. Department filtering
-    # ---------------------------------------------------------
 
     if departments:
         expression = _search_in(
@@ -87,10 +79,6 @@ def build_filter(
         if expression:
             filters.append(expression)
 
-    # ---------------------------------------------------------
-    # 3. Version filtering
-    # ---------------------------------------------------------
-
     if versions:
         expression = _search_in(
             "version",
@@ -100,10 +88,6 @@ def build_filter(
         if expression:
             filters.append(expression)
 
-    # ---------------------------------------------------------
-    # 4. Specific document filtering
-    # ---------------------------------------------------------
-
     if document_ids:
         expression = _search_in(
             "document_id",
@@ -112,13 +96,6 @@ def build_filter(
 
         if expression:
             filters.append(expression)
-
-    # ---------------------------------------------------------
-    # 5. Effective date
-    #
-    # Only retrieve documents whose effective date is
-    # less than or equal to the supplied date.
-    # ---------------------------------------------------------
 
     if effective_date_before:
 
@@ -130,10 +107,6 @@ def build_filter(
         filters.append(
             f"effective_date le {effective_date}"
         )
-
-    # ---------------------------------------------------------
-    # No filters
-    # ---------------------------------------------------------
 
     if not filters:
         return None

@@ -29,11 +29,7 @@ def ask(
     document_ids: list[str] | None = None,
     skip_analysis: bool = False,
 ) -> dict:
-
-    # =========================================================
-    # 1. LOCAL INPUT GUARDRAILS
-    # =========================================================
-
+# gaurdraile
     try:
 
         validate_query(
@@ -48,11 +44,7 @@ def ask(
             "blocked": True,
             "block_reason": "input_guardrail",
         }
-
-    # =========================================================
-    # 2. QUERY AMBIGUITY ANALYSIS
-    # =========================================================
-
+# ambiguity 
     if not skip_analysis:
 
         try:
@@ -63,11 +55,7 @@ def ask(
 
         except Exception:
 
-            # If analyzer fails, do not make the
-            # entire RAG system unusable.
-            #
-            # We fall back to normal retrieval.
-
+            # If analyzer fails, do not make the entire RAG system unusable. We fall back to normal retrieval.
             query_analysis = {
                 "is_ambiguous": False,
                 "reason": None,
@@ -75,13 +63,7 @@ def ask(
                 "clarification_question": None,
             }
 
-        # -----------------------------------------------------
-        # Ask clarification only for MATERIAL ambiguity
-        # -----------------------------------------------------
-
-        if query_analysis[
-            "is_ambiguous"
-        ]:
+        if query_analysis["is_ambiguous"]:
 
             return {
                 "answer": (
@@ -91,11 +73,8 @@ def ask(
                 ),
 
                 "sources": [],
-
                 "blocked": False,
-
                 "needs_clarification": True,
-
                 "clarification": {
                     "original_query": query,
 
@@ -113,12 +92,7 @@ def ask(
                 },
             }
 
-    # =========================================================
-    # 3. USER PROMPT INJECTION CHECK
-    # =========================================================
-
     try:
-
         user_security = shield_prompt(
             user_prompt=query,
             documents=[],
@@ -154,10 +128,6 @@ def ask(
             ),
         }
 
-    # =========================================================
-    # 4. HYBRID RETRIEVAL + SEMANTIC RERANKING
-    # =========================================================
-
     results = rerank(
         query=query,
         k=k,
@@ -173,10 +143,6 @@ def ask(
 
         document_ids=document_ids,
     )
-
-    # =========================================================
-    # 5. DOCUMENT PROMPT INJECTION CHECK
-    # =========================================================
 
     document_texts = [
         result.get(
@@ -207,10 +173,6 @@ def ask(
             ),
         }
 
-    # =========================================================
-    # 6. REMOVE MALICIOUS DOCUMENT CHUNKS
-    # =========================================================
-
     blocked_indexes = set(
         document_security[
             "document_attacks"
@@ -222,10 +184,6 @@ def ask(
         for index, result in enumerate(results)
         if index not in blocked_indexes
     ]
-
-    # =========================================================
-    # 7. NO SAFE DOCUMENTS
-    # =========================================================
 
     if not safe_results:
 
@@ -241,40 +199,22 @@ def ask(
             ),
         }
 
-    # =========================================================
-    # 8. BUILD CONTEXT
-    # =========================================================
-
     context = build_context(
         safe_results
     )
-
-    # =========================================================
-    # 9. BUILD LLM PROMPT
-    # =========================================================
 
     messages = build_prompt(
         query=query,
         context=context,
     )
 
-    # =========================================================
-    # 10. GENERATE ANSWER
-    # =========================================================
-
     raw_answer = generate_answer(
         messages
     )
 
-    # =========================================================
-    # 11. OUTPUT GUARDRAILS
-    # =========================================================
-
     try:
 
-        answer = validate_output(
-            raw_answer
-        )
+        answer = validate_output(raw_answer)
 
     except ValueError:
 
@@ -291,15 +231,9 @@ def ask(
             ),
         }
 
-    # =========================================================
-    # 12. SENSITIVE DATA PROTECTION
-    # =========================================================
-
     try:
 
-        sensitive_result = scan_sensitive_data(
-            answer
-        )
+        sensitive_result = scan_sensitive_data(answer)
 
     except Exception:
 
@@ -315,22 +249,8 @@ def ask(
             ),
         }
 
-    # =========================================================
-    # 13. REDACT PROTECTED DATA
-    # =========================================================
-
-    if sensitive_result[
-        "contains_sensitive_data"
-    ]:
-
-        answer = sensitive_result[
-            "redacted_text"
-        ]
-
-    # =========================================================
-    # 14. SOURCES
-    # =========================================================
-
+    if sensitive_result["contains_sensitive_data"]:
+        answer = sensitive_result["redacted_text"]
     sources = []
 
     for result in safe_results:
@@ -348,10 +268,6 @@ def ask(
                 "document_id"
             ),
         })
-
-    # =========================================================
-    # 15. FINAL RESPONSE
-    # =========================================================
 
     return {
         "answer": answer,

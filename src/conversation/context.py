@@ -13,20 +13,11 @@ def build_context(results) -> str:
         if not content:
             continue
 
-        document_name = result.get(
-            "document_name",
-            "Unknown"
-        )
+        document_name = result.get("document_name","Unknown")
 
-        page_number = result.get(
-            "page_number",
-            "Unknown"
-        )
+        page_number = result.get("page_number","Unknown")
 
-        section = result.get(
-            "section",
-            ""
-        )
+        section = result.get("section","")
 
         source = (
             f"{document_name}"

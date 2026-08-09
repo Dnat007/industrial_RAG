@@ -31,19 +31,14 @@ PROTECTED_CATEGORIES = {
 }
 
 
-def _is_protected_category(
-    category: str,
-) -> bool:
+def _is_protected_category(category: str,) -> bool:
 
     return category in PROTECTED_CATEGORIES
 
 
-def scan_sensitive_data(
-    text: str,
-) -> dict:
+def scan_sensitive_data(text: str) -> dict:
 
     if not text or not text.strip():
-
         return {
             "contains_sensitive_data": False,
             "entities": [],
@@ -56,16 +51,11 @@ def scan_sensitive_data(
     )
 
     document = response[0]
-
     entities = []
-
     protected_entities = []
 
     for entity in document.entities:
-
-        is_protected = _is_protected_category(
-            entity.category
-        )
+        is_protected = _is_protected_category(entity.category)
 
         entity_info = {
             "text": entity.text,
@@ -74,30 +64,13 @@ def scan_sensitive_data(
             "protected": is_protected,
         }
 
-        entities.append(
-            entity_info
-        )
+        entities.append(entity_info)
 
         if is_protected:
 
-            protected_entities.append(
-                entity_info
-            )
-
-    # =====================================================
-    # Build Policy-Based Redacted Text
-    #
-    # Azure's redacted_text may redact Person names
-    # too, so we DO NOT use it directly.
-    #
-    # Instead we redact only categories allowed
-    # by our policy.
-    # =====================================================
+            protected_entities.append(entity_info)
 
     redacted_text = text
-
-    # Process longer values first to avoid
-    # overlapping replacement problems.
 
     protected_entities_sorted = sorted(
         protected_entities,
@@ -108,10 +81,7 @@ def scan_sensitive_data(
     for entity in protected_entities_sorted:
 
         sensitive_value = entity["text"]
-
-        replacement = "*" * len(
-            sensitive_value
-        )
+        replacement = "*" * len(sensitive_value)
 
         redacted_text = redacted_text.replace(
             sensitive_value,
@@ -124,8 +94,6 @@ def scan_sensitive_data(
         ),
 
         "entities": entities,
-
         "protected_entities": protected_entities,
-
         "redacted_text": redacted_text,
     }

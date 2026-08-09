@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+test_azure_auth.py
+test_contentsafety.py
+test_llm.py
+test_pii.py
+test_prompt_shield.py
+test_rag.py
+test_sensitive_data.py
+test_connector.py
