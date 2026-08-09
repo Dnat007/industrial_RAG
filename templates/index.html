@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wire — Conversational AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+  <div class="app">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header__mark" aria-hidden="true">
+        <span class="header__dot"></span>
+      </div>
+      <div class="header__text">
+        <span class="header__title">Wire</span>
+        <span class="header__subtitle">a quieter way to talk to a model</span>
+      </div>
+      <div class="header__status" id="statusPill">
+        <span class="header__status-dot"></span>
+        <span class="header__status-label">online</span>
+      </div>
+    </header>
+
+    <!-- Conversation -->
+    <main class="log" id="log" role="log" aria-live="polite" aria-label="Conversation">
+
+      <!-- Welcome state -->
+      <div class="welcome" id="welcome">
+        <p class="welcome__eyebrow">00 / start</p>
+        <h1 class="welcome__heading">What's on your mind?</h1>
+        <p class="welcome__body">Ask a question, paste something you're stuck on, or think out loud. Every exchange here
+          runs one message at a time — clear, and easy to follow back.</p>
+      </div>
+
+      <div class="messages" id="messages"></div>
+
+    </main>
+
+    <!-- Composer -->
+    <footer class="composer-wrap">
+      <form class="composer" id="composerForm">
+        <div class="composer__field">
+          <textarea id="messageInput" class="composer__input" placeholder="Send a message…" rows="1"
+            aria-label="Message" maxlength="4000"></textarea>
+        </div>
+        <button type="submit" class="composer__send" id="sendButton" aria-label="Send message" disabled>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="composer__send-icon">
+            <path d="M4 12L20 4L13 20L11 13L4 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"
+              stroke-linecap="round" />
+          </svg>
+        </button>
+      </form>
+      <p class="composer__hint"><kbd>Enter</kbd> to send · <kbd>Shift</kbd> + <kbd>Enter</kbd> for a new line</p>
+    </footer>
+
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // ------------------------------------------------------------------
+      // Configuration — points at the Flask /ask endpoint on this same app.
+      // ------------------------------------------------------------------
+      const API_URL = "/ask";
+      // ------------------------------------------------------------------
+      let conversationHistory = []; // [{ role: "user" | "assistant", content: string }]
+      let isWaitingForResponse = false;
+      const logEl = document.getElementById("log");
+      const welcomeEl = document.getElementById("welcome");
+      const messagesEl = document.getElementById("messages");
+      const formEl = document.getElementById("composerForm");
+      const inputEl = document.getElementById("messageInput");
+      const sendButtonEl = document.getElementById("sendButton");
+
+      // ------------------------------------------------------------------
+      // Backend integration
+      // ------------------------------------------------------------------
+      async function sendMessageToBackend(message, history) {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: message,
+            conversation: history
+          })
+        });
+
+        // The Flask route always returns JSON, including on 4xx/5xx,
+        // so we parse it first and use response.ok to decide how to treat it.
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          const errorMessage = (data && data.error) ? data.error : "Failed to get response from backend";
+          throw new Error(errorMessage);
+        }
+
+        return data;
+      }
+
+      // ------------------------------------------------------------------
+      // Rendering helpers
+      // ------------------------------------------------------------------
+      function formatTime(date) {
+        return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+
+      function dismissWelcome() {
+        if (welcomeEl && !welcomeEl.hidden) {
+          welcomeEl.classList.add("welcome--leaving");
+          setTimeout(() => { welcomeEl.hidden = true; }, 200);
+        }
+      }
+
+      function scrollToBottom() {
+        logEl.scrollTo({ top: logEl.scrollHeight, behavior: "smooth" });
+      }
+
+      function createMessageNode(role, text, options) {
+        options = options || {};
+        const isUser = role === "user";
+
+        const row = document.createElement("div");
+        row.className = "message message--" + role + (options.isError ? " message--error" : "");
+
+        const meta = document.createElement("div");
+        meta.className = "message__meta";
+
+        const label = document.createElement("span");
+        label.className = "message__label";
+        label.textContent = isUser ? "you" : (options.isError ? "wire · issue" : "wire");
+        meta.appendChild(label);
+
+        const time = document.createElement("span");
+        time.className = "message__time";
+        time.textContent = formatTime(new Date());
+        meta.appendChild(time);
+
+        const bubble = document.createElement("div");
+        bubble.className = "message__bubble";
+
+        const bar = document.createElement("span");
+        bar.className = "message__bar";
+        bubble.appendChild(bar);
+
+        const content = document.createElement("div");
+        content.className = "message__content";
+        content.textContent = text;
+        bubble.appendChild(content);
+
+        row.appendChild(meta);
+        row.appendChild(bubble);
+
+        return row;
+      }
+
+      function appendMessage(role, text, options) {
+        const node = createMessageNode(role, text, options);
+        messagesEl.appendChild(node);
+        scrollToBottom();
+        return node;
+      }
+
+      function appendTypingIndicator() {
+        const row = document.createElement("div");
+        row.className = "message message--assistant message--pending";
+        row.id = "typingIndicator";
+
+        const meta = document.createElement("div");
+        meta.className = "message__meta";
+
+        const label = document.createElement("span");
+        label.className = "message__label";
+        label.textContent = "wire · receiving";
+        meta.appendChild(label);
+
+        const bubble = document.createElement("div");
+        bubble.className = "message__bubble";
+
+        const bar = document.createElement("span");
+        bar.className = "message__bar";
+        bubble.appendChild(bar);
+
+        const dots = document.createElement("div");
+        dots.className = "typing";
+        dots.setAttribute("aria-label", "Wire is composing a reply");
+        dots.innerHTML = '<span class="typing__dot"></span><span class="typing__dot"></span><span class="typing__dot"></span>';
+        bubble.appendChild(dots);
+
+        row.appendChild(meta);
+        row.appendChild(bubble);
+
+        messagesEl.appendChild(row);
+        scrollToBottom();
+      }
+
+      function removeTypingIndicator() {
+        const node = document.getElementById("typingIndicator");
+        if (node) node.remove();
+      }
+
+      // ------------------------------------------------------------------
+      // Input handling
+      // ------------------------------------------------------------------
+      function autoGrowInput() {
+        inputEl.style.height = "auto";
+        const maxHeight = 200;
+        inputEl.style.height = Math.min(inputEl.scrollHeight, maxHeight) + "px";
+      }
+
+      function updateSendButtonState() {
+        const hasText = inputEl.value.trim().length > 0;
+        sendButtonEl.disabled = !hasText || isWaitingForResponse;
+      }
+
+      function setComposerEnabled(enabled) {
+        inputEl.disabled = !enabled;
+        isWaitingForResponse = !enabled;
+        updateSendButtonState();
+        if (enabled) inputEl.focus();
+      }
+
+      inputEl.addEventListener("input", () => {
+        autoGrowInput();
+        updateSendButtonState();
+      });
+
+      inputEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          formEl.requestSubmit();
+        }
+      });
+
+      document.querySelectorAll(".welcome__chip").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          inputEl.value = chip.getAttribute("data-prompt") || "";
+          autoGrowInput();
+          updateSendButtonState();
+          inputEl.focus();
+        });
+      });
+
+      // ------------------------------------------------------------------
+      // Send flow
+      // ------------------------------------------------------------------
+      async function handleSend(message) {
+        dismissWelcome();
+        appendMessage("user", message);
+        conversationHistory.push({ role: "user", content: message });
+
+        setComposerEnabled(false);
+        appendTypingIndicator();
+
+        try {
+          const data = await sendMessageToBackend(message, conversationHistory);
+          removeTypingIndicator();
+
+          const replyText = (data && typeof data.response === "string" && data.response.trim())
+            ? data.response
+            : "I didn't get a readable reply from the backend just now.";
+
+          appendMessage("assistant", replyText);
+          conversationHistory.push({ role: "assistant", content: replyText });
+        } catch (err) {
+          removeTypingIndicator();
+          appendMessage(
+            "assistant",
+            (err && err.message) ? err.message : "Something went wrong reaching the backend. Try sending that again.",
+            { isError: true }
+          );
+        } finally {
+          setComposerEnabled(true);
+        }
+      }
+
+      formEl.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (isWaitingForResponse) return;
+
+        const message = inputEl.value.trim();
+        if (!message) return;
+
+        inputEl.value = "";
+        autoGrowInput();
+        updateSendButtonState();
+
+        handleSend(message);
+      });
+
+      // ------------------------------------------------------------------
+      // Init
+      // ------------------------------------------------------------------
+      updateSendButtonState();
+      inputEl.focus();
+
+    })();
+  </script>
+
+</body>
+
+</html>

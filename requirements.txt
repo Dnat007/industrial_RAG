@@ -19,3 +19,4 @@ requests
 azure-ai-textanalytics
 azure-identity 
 azure-storage-blob
+flask
